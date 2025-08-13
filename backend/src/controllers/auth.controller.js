@@ -1,6 +1,6 @@
 import User from "../models/user.js";
 import jwt from 'jsonwebtoken';
-import {upsertStreamUser} from "../lib/stream.js";
+import { upsertStreamUser } from "../lib/stream.js";
 
 export async function signup(req, res) {
   const {
@@ -24,8 +24,7 @@ export async function signup(req, res) {
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!emailRegex.test(email)) 
-    {
+    if (!emailRegex.test(email)) {
       return res.status(400).json({
         message: "Invalid email format"
       });
@@ -51,17 +50,15 @@ export async function signup(req, res) {
       profilePic: RandomAvatar,
     });
 
-    try 
-    {
+    try {
       await upsertStreamUser({
         id: newUser._id.toString(),
         name: fullName,
         image: newUser.profilePic || "",
       });
       console.log(`Stream user created for ${newUser.fullName}`);
-    } 
-    catch (error) 
-    {
+    }
+    catch (error) {
       console.error("Error creating Stream user:", error);
     }
 
@@ -154,6 +151,51 @@ export function logout(req, res) {
   });
 }
 
-export function onboard(req,res){
-  
+export async function onboard(req, res) {
+  try 
+  {
+    const userId = req.user._id;
+
+    const { fullName, bio, nativeLanguage, learningLanguage } = req.body;
+
+    if (!fullName || !bio || !nativeLanguage || !learningLanguage) {
+      return res.status(400).json({
+        message: "All fields are required",
+        missingfields: [
+          !fullName && "fullName",
+          !bio && "bio",
+          !nativeLanguage && "nativeLanguage",
+          !learningLanguage && "learningLanguage"
+        ].filter(Boolean),
+      });
+    }
+
+    // Update user information
+    const updatedUser = await User.findByIdAndUpdate(userId, {
+      ...req.body,
+      isOnboarded: true,
+    }, { new: true });
+
+    if (!updatedUser) return res.status(404).json({ error: "User not found" });
+
+    try 
+    {
+      await upsertStreamUser({
+        id: updatedUser._id.toString(),
+        name: updatedUser.fullName,
+        image: updatedUser.profilePic || "",
+      });
+      console.log("Stream user updated for", updatedUser.fullName);
+    } 
+    catch (error) 
+    {
+      console.error("Error updating User data during stream onboarding:", error);
+    }
+
+    res.status(200).json({ success: true, message: "User onboarding complete" });
+  }
+  catch (error) {
+    console.error("Error in onboarding controller:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 }
